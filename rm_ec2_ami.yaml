@@ -1,0 +1,44 @@
+# intended to be run from a local host using ansible
+- hosts: localhost
+  connection: local
+  any_errors_fatal: true
+  vars:
+    ansible_python_interpreter: "/usr/bin/env python2"
+    ami_name: ""
+
+  tasks:
+    - name: validate vars
+      assert:
+        that:
+          ami_name != ""
+
+    - name: verify destination AMI exists
+      ec2_ami_find:
+        owner:  self
+        region: "us-east-1"
+        name:   "{{ ami_name }}"
+      register: ami_found
+
+    - set_fact: amiid="{{ ami_found.results[0].ami_id }}"
+      when: ami_found.results[0].ami_id is defined
+
+    - debug: var=ami_found
+      when: ami_found.results[0].ami_id is defined
+
+    - debug: var=amiid
+    - name: remove ami
+      ec2_ami:
+        image_id: "{{ amiid }}"
+        delete_snapshot: True
+        state: absent
+      when: amiid is defined
+
+
+    - name: verify AMI is gone
+      ec2_ami_find:
+        owner: self
+        region: "us-east-1"
+        no_result_action: success
+      until: results is not defined
+      delay: 30
+      retries: 10
